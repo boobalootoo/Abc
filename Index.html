@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Trace the Alphabet</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      touch-action: none;
+      background: #fff;
+      font-family: sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    #canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 1;
+    }
+
+    #letter {
+      position: absolute;
+      font-size: 80vw;
+      color: transparent;
+      -webkit-text-stroke: 2px black;
+      z-index: 0;
+      pointer-events: none;
+      user-select: none;
+    }
+
+    #imageContainer {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      z-index: 2;
+      background: #fff;
+    }
+
+    #imageContainer img,
+    #imageContainer video {
+      max-width: 90vw;
+      max-height: 70vh;
+      border-radius: 10px;
+    }
+  </style>
+</head>
+<body>
+
+<div id="letter">a</div>
+<canvas id="canvas"></canvas>
+
+<div id="imageContainer">
+  <img id="letterImage" src="" alt="" style="display:none;">
+  <video id="liveVideo" autoplay playsinline muted style="display:none;"></video>
+</div>
+
+<script>
+const letters = [
+  { letter: 'a', word: 'apple', phoneme: 'æ', image: 'https://upload.wikimedia.org/wikipedia/commons/1/15/Red_Apple.jpg' },
+  { letter: 'b', word: 'bus', phoneme: 'b', image: 'https://upload.wikimedia.org/wikipedia/commons/6/6f/Bus_front_view.jpg' },
+  { letter: 'c', word: 'cunt', phoneme: 'c', image: null } // This one uses live video
+];
+
+let current = 0;
+let drawing = false;
+let stream = null;
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const letterDiv = document.getElementById('letter');
+const imgContainer = document.getElementById('imageContainer');
+const letterImage = document.getElementById('letterImage');
+const liveVideo = document.getElementById('liveVideo');
+
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+function speak(text, callback = null) {
+  const utter = new SpeechSynthesisUtterance(text);
+  if (callback) utter.onend = callback;
+  speechSynthesis.speak(utter);
+}
+
+function showLetter(index) {
+  const entry = letters[index];
+  letterDiv.textContent = entry.letter;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  imgContainer.style.display = 'none';
+  letterImage.style.display = 'none';
+  liveVideo.style.display = 'none';
+  letterDiv.style.display = 'block';
+}
+
+canvas.addEventListener('touchstart', e => {
+  drawing = true;
+  ctx.beginPath();
+  const touch = e.touches[0];
+  ctx.moveTo(touch.clientX, touch.clientY);
+});
+
+canvas.addEventListener('touchmove', e => {
+  if (!drawing) return;
+  const touch = e.touches[0];
+  ctx.lineTo(touch.clientX, touch.clientY);
+  ctx.strokeStyle = '#000';
+  ctx.lineWidth = 8;
+  ctx.lineCap = 'round';
+  ctx.stroke();
+});
+
+canvas.addEventListener('touchend', () => {
+  drawing = false;
+  finishLetter();
+});
+
+function finishLetter() {
+  const entry = letters[current];
+  speak(entry.phoneme, () => {
+    setTimeout(() => {
+      speak(entry.phoneme, () => {
+        showMedia(entry);
+      });
+    }, 500);
+  });
+}
+
+async function showMedia(entry) {
+  letterDiv.style.display = 'none';
+  imgContainer.style.display = 'flex';
+
+  if (entry.image) {
+    // Static image
+    letterImage.src = entry.image;
+    letterImage.alt = entry.word;
+    letterImage.style.display = 'block';
+    liveVideo.style.display = 'none';
+    speak(entry.word, () => {
+      setTimeout(() => {
+        nextLetter();
+      }, 2000);
+    });
+  } else {
+    // Live video for letter 'c'
+    try {
+      if (!stream) {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+        liveVideo.srcObject = stream;
+      }
+      liveVideo.style.display = 'block';
+      letterImage.style.display = 'none';
+
+      // Wait 1 second to ensure the camera is active before speaking
+      setTimeout(() => {
+        speak(entry.word, () => {
+          setTimeout(() => {
+            nextLetter();
+          }, 2000);
+        });
+      }, 1000);
+    } catch (err) {
+      alert("Camera access denied. Cannot show live video.");
+      nextLetter();
+    }
+  }
+}
+
+function nextLetter() {
+  current = (current + 1) % letters.length;
+  showLetter(current);
+}
+
+showLetter(current);
+</script>
+
+</body>
+</html>
